@@ -13,21 +13,14 @@ if __name__ == '__main__':
             if '~' not in line and '\t' not in line and '        ' not in line:
                 # actual quote text
                 running_text += (" " + line.rstrip())
-            else:
-                author = line.rstrip()
         else:
             csv_entries.append({'fortune_text': running_text})
-            # print('Q:', running_text)
-            # print('A:', author)
-            # author = '  ~Uknown'
             running_text = ''
 
     with open('data/fortune_text.csv', 'w') as csv_file:
         writer = DictWriter(csv_file, fieldnames=['fortune_text'])
         writer.writerows(csv_entries)
     print('All Done!')
-
-
 
 
 
