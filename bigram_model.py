@@ -9,6 +9,45 @@ fortun_csv_fn = 'data/fortune_text.csv'
 punct_translator = str.maketrans('', '', punctuation)
 number_translator = str.maketrans('', '', '01234567890')
 
+def random_sampling_generator(probabilities_table, vocabulary, max_length=None, lin_p_scale=False):
+    sentence = ['<SoS>']
+    last_word = sentence[len(sentence) - 1]
+    p_table = probabilities_table.copy()
+
+    if lin_p_scale:
+        EoS_index = vocabulary.index('<EoS>')
+        delta_p_EoS = probabilities_table[:, EoS_index]
+        s = delta_p_EoS.shape
+        delta_p_EoS = (np.ones(shape=s) - delta_p_EoS)/(1.0 if max_length is None else max_length)
+        # print(delta_p_EoS.shape)
+        delta_p = probabilities_table.copy()
+        delta_p /= (-1 * (1.0 if max_length is None else max_length))
+        for i in range(0, delta_p_EoS.shape[0]):
+            delta_p[i, EoS_index] = delta_p_EoS[i]
+
+        while last_word != '<EoS>':
+            index = vocabulary.index(last_word)
+            p = p_table[index, :]
+            next_index = np.random.choice(p.shape[0], p=p)
+            last_word = vocabulary[next_index]
+            sentence.append(last_word)
+
+            if max_length is not None:
+                p_table += delta_p
+    else:
+        counter = 0
+        while last_word != '<EoS>' and counter < max_length:
+            index = vocabulary.index(last_word)
+            p = p_table[index, :]
+            next_index = np.random.choice(p.shape[0], p=p)
+            last_word = vocabulary[next_index]
+            sentence.append(last_word)
+            counter += 1
+
+        sentence.append('<EoS.')
+
+    return ' '.join(sentence)
+
 
 def clean_text(text):
     cleaned_text = ' '. join(text.split('-')) # removes run on words
@@ -48,7 +87,7 @@ def collect_vocabulary(texts):
     vocabulary = set(vocabulary) # leaves only unique words
     vocabulary = list(vocabulary)
     vocabulary.sort()
-    return vocabulary   
+    return vocabulary
 
 
 def laplacian_smoothing(counts, vocabulary, k):
@@ -95,15 +134,16 @@ if __name__ == '__main__':
     print(vocabulary[0:10])
 
     lp_smoothed_bigram_probabilities = laplacian_smoothing(bigram_counts, vocabulary, 1)
-    for i in range(0, 100):
-        for j in range(0, 100):
-            print('P('+vocabulary[j]+'|'+vocabulary[i]+')=\t', lp_smoothed_bigram_probabilities[i, j])
+    # for i in range(0, 100):
+    #     for j in range(0, 100):
+    #         print('P('+vocabulary[j]+'|'+vocabulary[i]+')=\t', lp_smoothed_bigram_probabilities[i, j])
 
 
-    # gt_smoothed_bigram_counts = good_turing_smoothing(bigram_counts, vocabulary)
+    new_fortune = random_sampling_generator(probabilities_table=lp_smoothed_bigram_probabilities,
+                                            vocabulary=vocabulary,
+                                            max_length=10)
 
-
-
+    print(new_fortune)
 
 
 
