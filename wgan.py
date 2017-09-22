@@ -100,7 +100,7 @@ class WGAN(object):
         be passed to the critic. It is assumed that this always returns a batch
         of the same size, i.e. the 0th dimension should always have the same size.
     """
-    def train(self, sess, num_critic_steps, sample_real_data):
+    def train(self, num_critic_steps, sample_real_data):
         for critic_step in range(num_critic_steps):
             # sample a batch of real data
             x_real = next(sample_real_data)
@@ -114,7 +114,7 @@ class WGAN(object):
             epsilon = np.random.rand(batch_size)
 
             # train the cirtic using the loss on the batch
-            sess.run(self.train_critic, feed_dict={
+            self.train_critic.run(feed_dict={
                 self.generator_noise_sym : noise,
                 self.critic_input_real_sym : x_real,
                 self.epsilon_sym : epsilon
@@ -124,6 +124,6 @@ class WGAN(object):
         noise = np.random.rand(batch_size, *self.generator_noise_shape)
 
         # train the generator using the loss on the batch
-        sess.run(self.train_generator, feed_dict={
+        self.train_generator.run(feed_dict={
             self.generator_noise_sym : noise
         })
