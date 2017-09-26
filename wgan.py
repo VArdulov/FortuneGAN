@@ -15,55 +15,59 @@ class WGAN(object):
         generator_noise_shape:
             Shape of 1 noise input to the generator (no None entries).
 
-        generator_model:
+        generator_model(input_sym, reuse):
             Function that takes a tensor that represents a batch of noise
-            and outputs a tuple:
-                [0] a tensor that represents fake data
-                [1] the list of variables created
+            and outputs a tensor that represents fake data.
 
-        critic_model:
+        critic_model(input_sym, reuse):
             Function that takes a tensor that represents a batch of data
-            and outputs a tuple:
-                [0] a tensor that represents the critic's predictions
-                [1] the list of variables created
+            and outputs a tensor that represents the critic's predictions.
 
             This function may be called within a variable scope with reuse=True.
 
             The output should be a 1-dimensional vector whose length is the batch size.
     """
     def __init__(self,
-        generator_model,
         generator_noise_shape,
+        generator_model,
         critic_model,
         gradient_penalty_factor=10):
 
         self.generator_noise_shape = generator_noise_shape
 
         generator_noise_shape = [None] + generator_noise_shape
-        critic_input_shape = [None] + critic_input_shape
 
-        with tf.variable_scope(name='generator', reuse=False):
+        with tf.variable_scope('generator', reuse=False):
             self.generator_noise_sym = tf.placeholder(tf.float32, shape=generator_noise_shape, name='generator_noise')
-            self.generator_output_sym, self.generator_vars = generator_model(self.generator_noise_sym)
+            self.generator_output_sym = generator_model(self.generator_noise_sym, reuse=False)
+        self.generator_vars = tf.get_collection(tf.GraphKeys.VARIABLES, scope='generator')
 
 
-        with tf.variable_scope(name='critic', reuse=False):
+        with tf.variable_scope('critic', reuse=False):
             self.critic_input_real_sym = tf.placeholder(
                 tf.float32,
                 shape=self.generator_output_sym.get_shape(),
                 name='critic_input_real'
             )
-            self.critic_output_real_sym, self.critic_vars = critic_model(self.critic_input_sym)
+            self.critic_output_real_sym = critic_model(self.critic_input_real_sym, reuse=False)
+        self.critic_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='critic')
+
+
+        # NOTE: For debugging.
+        print("Generator variables: {}".format([v.name for v in self.generator_vars]))
+        print("Critic variables: {}".format([v.name for v in self.critic_vars]))
 
 
         # Used for gradient normalization.
         self.epsilon_sym = tf.placeholder(tf.float32, shape=[None], name='gradient_interp')
 
-        with tf.variable_scope(name='critic', reuse=True):
-            self.critic_output_fake_sym, _ = critic_model(self.generator_output_sym)
+        with tf.variable_scope('critic', reuse=True):
+            self.critic_output_fake_sym = critic_model(self.generator_output_sym, reuse=True)
 
-            x_hat = self.epsilon_sym * self.critic_input_real_sym + (1 - self.epsilon_sym) * self.generator_output_sym
-            self.critic_output_interp_sym, _ = critic_model(x_hat)
+            scalar = tf.expand_dims(self.epsilon_sym, axis=1)
+            x_hat = scalar * self.critic_input_real_sym + (1 - scalar) * self.generator_output_sym
+
+            self.critic_output_interp_sym = critic_model(x_hat, reuse=True)
 
 
 
@@ -84,8 +88,8 @@ class WGAN(object):
         self.critic_optimizer = tf.train.AdamOptimizer(1e-3)
         self.generator_optimizer = tf.train.AdamOptimizer(1e-3)
 
-        self.train_critic = critic_optimizer.minimize(self.critic_loss, var_list=self.critic_vars)
-        self.train_generator = generator_optimizer.minimize(self.generator_loss, var_list=self.generator_vars)
+        self.train_critic = self.critic_optimizer.minimize(self.critic_loss, var_list=self.critic_vars)
+        self.train_generator = self.generator_optimizer.minimize(self.generator_loss, var_list=self.generator_vars)
 
 
 
@@ -106,14 +110,13 @@ class WGAN(object):
             x_real = next(sample_real_data)
             batch_size = x_real.shape[0]
 
-
             # sample a batch of noise
             noise = np.random.rand(batch_size, *self.generator_noise_shape)
 
             # pick a batch of random epsilon in [0...1] (for gradient normalization)
             epsilon = np.random.rand(batch_size)
 
-            # train the cirtic using the loss on the batch
+            # train the critic using the loss on the batch
             self.train_critic.run(feed_dict={
                 self.generator_noise_sym : noise,
                 self.critic_input_real_sym : x_real,
