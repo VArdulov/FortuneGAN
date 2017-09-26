@@ -34,15 +34,17 @@ class WGAN(object):
         gradient_penalty_factor=10):
 
         self.generator_noise_shape = generator_noise_shape
-
         generator_noise_shape = [None] + generator_noise_shape
 
+
+        ### Create the generator computation. ###
         with tf.variable_scope('generator', reuse=False):
             self.generator_noise_sym = tf.placeholder(tf.float32, shape=generator_noise_shape, name='generator_noise')
             self.generator_output_sym = generator_model(self.generator_noise_sym, reuse=False)
         self.generator_vars = tf.get_collection(tf.GraphKeys.VARIABLES, scope='generator')
+        #####################################
 
-
+        ### Create the critic computation for real data. ###
         with tf.variable_scope('critic', reuse=False):
             self.critic_input_real_sym = tf.placeholder(
                 tf.float32,
@@ -51,6 +53,26 @@ class WGAN(object):
             )
             self.critic_output_real_sym = critic_model(self.critic_input_real_sym, reuse=False)
         self.critic_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='critic')
+        ####################################################
+
+
+
+        with tf.variable_scope('critic', reuse=True):
+
+            ### Create the critic computation for fake data. ###
+            self.critic_output_fake_sym = critic_model(self.generator_output_sym, reuse=True)
+            ####################################################
+
+
+            ### Create the critic computation for the gradient term. ###
+            self.epsilon_sym = tf.placeholder(tf.float32, shape=[None], name='gradient_interp')
+            scalar = tf.expand_dims(self.epsilon_sym, axis=1)
+
+            x_hat = scalar * self.critic_input_real_sym + (1 - scalar) * self.generator_output_sym
+
+            self.critic_output_interp_sym = critic_model(x_hat, reuse=True)
+            ############################################################
+
 
 
         # NOTE: For debugging.
@@ -58,21 +80,9 @@ class WGAN(object):
         print("Critic variables: {}".format([v.name for v in self.critic_vars]))
 
 
-        # Used for gradient normalization.
-        self.epsilon_sym = tf.placeholder(tf.float32, shape=[None], name='gradient_interp')
-
-        with tf.variable_scope('critic', reuse=True):
-            self.critic_output_fake_sym = critic_model(self.generator_output_sym, reuse=True)
-
-            scalar = tf.expand_dims(self.epsilon_sym, axis=1)
-            x_hat = scalar * self.critic_input_real_sym + (1 - scalar) * self.generator_output_sym
-
-            self.critic_output_interp_sym = critic_model(x_hat, reuse=True)
-
-
-
+        ### This section defines the critic's loss function. ###
+        # Define the gradient term in the critic's loss function.
         interp_gradient = tf.gradients(self.critic_output_interp_sym, x_hat)[0]
-
         gradient_penalty = tf.norm(interp_gradient, axis=1) - 1
         gradient_penalty = gradient_penalty_factor * gradient_penalty * gradient_penalty
 
@@ -81,15 +91,21 @@ class WGAN(object):
             - tf.reduce_mean( self.critic_output_real_sym )
             + tf.reduce_mean( gradient_penalty )
         )
+        ########################################################
 
+
+        ### The generator's loss function. ###
         self.generator_loss = -tf.reduce_mean( self.critic_output_fake_sym )
+        ######################################
 
 
+        ### The optimizer objects and operations. ###
         self.critic_optimizer = tf.train.AdamOptimizer(1e-3)
         self.generator_optimizer = tf.train.AdamOptimizer(1e-3)
 
         self.train_critic = self.critic_optimizer.minimize(self.critic_loss, var_list=self.critic_vars)
         self.train_generator = self.generator_optimizer.minimize(self.generator_loss, var_list=self.generator_vars)
+        #############################################
 
 
 
