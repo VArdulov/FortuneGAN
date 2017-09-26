@@ -41,7 +41,7 @@ class WGAN(object):
         with tf.variable_scope('generator', reuse=False):
             self.generator_noise_sym = tf.placeholder(tf.float32, shape=generator_noise_shape, name='generator_noise')
             self.generator_output_sym = generator_model(self.generator_noise_sym, reuse=False)
-        self.generator_vars = tf.get_collection(tf.GraphKeys.VARIABLES, scope='generator')
+        self.generator_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='generator')
         #####################################
 
         ### Create the critic computation for real data. ###
@@ -100,8 +100,8 @@ class WGAN(object):
 
 
         ### The optimizer objects and operations. ###
-        self.critic_optimizer = tf.train.AdamOptimizer(1e-3)
-        self.generator_optimizer = tf.train.AdamOptimizer(1e-3)
+        self.critic_optimizer = tf.train.AdamOptimizer(1e-4)
+        self.generator_optimizer = tf.train.AdamOptimizer(1e-4)
 
         self.train_critic = self.critic_optimizer.minimize(self.critic_loss, var_list=self.critic_vars)
         self.train_generator = self.generator_optimizer.minimize(self.generator_loss, var_list=self.generator_vars)
